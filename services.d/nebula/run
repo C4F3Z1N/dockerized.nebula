@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+CONFIG_DIR=${CONFIG_DIR:-"/etc/nebula"}
+TUN="/dev/net/tun"
+
+if [ ! -e $TUN ]; then
+	mkdir -p $(dirname $TUN)
+	mknod -m a+w $TUN c 10 200
+fi
+
+exec nebula -config $CONFIG_DIR/config.yml
