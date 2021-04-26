@@ -17,8 +17,4 @@ ARG CONFIG_DIR="/etc/nebula"
 ENV CONFIG_DIR=${CONFIG_DIR}
 VOLUME ${CONFIG_DIR}
 
-ARG PWD="/etc/services.d"
-WORKDIR ${PWD}
-ADD services.d .
-
-CMD ["s6-svscan"]
+ADD overlay-rootfs /
