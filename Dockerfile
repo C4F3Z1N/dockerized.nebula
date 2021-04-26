@@ -5,18 +5,20 @@ FROM alpine:${ALPINE_VERSION}
 ARG VERSION="1.3.0"
 
 RUN apk add --no-cache \
-		bash \
-		libqrencode \
-		s6
+		inotify-tools \
+		procps \
+		s6-overlay
 
-# TODO: deal with raspberry pi;
-RUN apk add --no-cache "nebula=${VERSION}-r0"
+ENTRYPOINT ["/init"]
 
-VOLUME ["/etc/nebula"]
+RUN apk add --no-cache "nebula=${VERSION}-r1"
 
-ARG PWD="/opt/services.d"
+ARG CONFIG_DIR="/etc/nebula"
+ENV CONFIG_DIR=${CONFIG_DIR}
+VOLUME ${CONFIG_DIR}
+
+ARG PWD="/etc/services.d"
 WORKDIR ${PWD}
 ADD services.d .
-RUN grep -rl "^#\!" . | xargs chmod -v a+x
 
 CMD ["s6-svscan"]

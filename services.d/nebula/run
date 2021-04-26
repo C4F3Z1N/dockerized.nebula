@@ -1,6 +1,7 @@
-#!/usr/bin/env bash
+#!/usr/bin/with-contenv sh
 
-CONFIG_DIR=${CONFIG_DIR:-"/etc/nebula"}
+CONFIG_FILE=${CONFIG_FILE:-$(find $CONFIG_DIR -iname "*.y*ml" | head -n 1)}
+
 TUN="/dev/net/tun"
 
 if [ ! -e $TUN ]; then
@@ -8,4 +9,13 @@ if [ ! -e $TUN ]; then
 	mknod -m a+w $TUN c 10 200
 fi
 
-exec nebula -config $CONFIG_DIR/config.yml
+if ! nebula -test -config $CONFIG_FILE &> /dev/null; then
+	cd $(readlink -f $0 | xargs dirname)
+	echo -e "Missing/invalid nebula config file.\nAborting.\n$CONFIG_FILE" >&2
+	exec s6-svscanctl -b $(dirname $PWD)
+else
+	cd $(readlink -f $CONFIG_FILE | xargs dirname)
+	chmod -R +r $PWD
+	exec s6-setuidgid nebula \
+		nebula -config $CONFIG_FILE
+fi

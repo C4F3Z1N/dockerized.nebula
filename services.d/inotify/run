@@ -1,0 +1,21 @@
+#!/usr/bin/with-contenv sh
+
+# is nebula running for more then 1 sec?
+until NEBULA_PID=$(pidof nebula) && [ $(ps -p $NEBULA_PID -o "etimes=") -gt 1 ]; do
+	sleep 1
+done
+
+# go to nebula s6 service dir;
+cd $(ps -p $NEBULA_PID -o "ppid=" | xargs pwdx | awk '{print $NF}')
+
+if [ -z $CONFIG_FILE ]; then
+	CONFIG_FILE=$( \
+		ps -p $NEBULA_PID -o "args=" | \
+			sed "s/\s\+/\n/g" | \
+			xargs -I % sh -c "nebula -test -config % &> /dev/null && echo %" \
+	)
+fi
+
+while inotifywait -e "create,delete,modify,move" -q -r $CONFIG_DIR $CONFIG_FILE; do
+	exec s6-svc -r $PWD
+done
