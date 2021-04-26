@@ -9,7 +9,7 @@ RUN apk add --no-cache \
 		procps \
 		s6-overlay
 
-ENTRYPOINT ["/init"]
+CMD ["/init"]
 
 RUN apk add --no-cache "nebula=${VERSION}-r1"
 
