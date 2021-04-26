@@ -13,8 +13,8 @@ ENTRYPOINT ["/init"]
 
 RUN apk add --no-cache "nebula=${VERSION}-r1"
 
+COPY overlay-rootfs /
+
 ARG CONFIG_DIR="/etc/nebula"
 ENV CONFIG_DIR=${CONFIG_DIR}
 VOLUME ${CONFIG_DIR}
-
-ADD overlay-rootfs /
