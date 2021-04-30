@@ -1,5 +1,7 @@
 #!/usr/bin/with-contenv sh
 
+set -e
+
 # is nebula running for more then 1 sec?
 until NEBULA_PID=$(pidof nebula) && [ $(ps -p $NEBULA_PID -o "etimes=") -gt 1 ]; do
 	sleep 1
@@ -12,7 +14,7 @@ if [ -z $CONFIG_FILE ]; then
 	CONFIG_FILE=$( \
 		ps -p $NEBULA_PID -o "args=" | \
 			sed "s/\s\+/\n/g" | \
-			xargs -I % sh -c "nebula -test -config % &> /dev/null && echo %" \
+			xargs -I % sh -c "nebula -test -config % &> /dev/null && echo % || :" \
 	)
 fi
 

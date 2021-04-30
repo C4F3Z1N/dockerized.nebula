@@ -1,5 +1,7 @@
 #!/usr/bin/with-contenv sh
 
+set -e
+
 CONFIG_FILE=${CONFIG_FILE:-$(find $CONFIG_DIR -iname "*.y*ml" | head -n 1)}
 
 TUN="/dev/net/tun"
