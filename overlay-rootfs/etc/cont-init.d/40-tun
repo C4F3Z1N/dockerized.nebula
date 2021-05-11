@@ -1,0 +1,10 @@
+#!/usr/bin/with-contenv sh
+
+set -e
+
+TUN="/dev/net/tun"
+
+if [ ! -e $TUN ]; then
+	mkdir -p $(dirname $TUN)
+	mknod -m a+w $TUN c 10 200
+fi

@@ -1,0 +1,23 @@
+#!/usr/bin/with-contenv sh
+
+set -e
+
+REQUIRED_CAPS=${REQUIRED_CAPS:-"cap_net_admin"}
+
+checkpcaps() {
+    local CURRENT="$(getpcaps $$),"
+	local MISSING=$(mktemp -u)
+    for REQUIRED in "$@"; do
+		if ! echo $CURRENT | grep -q "$REQUIRED,"; then
+			REQUIRED=$(echo ${REQUIRED#"cap_"} | tr "[a-z]" "[A-Z]")
+			echo $REQUIRED >> $MISSING
+		fi
+    done
+	cat $MISSING 2> /dev/null
+}
+
+if MISSING=$(checkpcaps $REQUIRED_CAPS); then
+	echo "[ERROR] Linux capabilities are missing. Please include them and try again." >&2
+	echo -e "\te.g. \"docker run$(echo $MISSING | xargs -n 1 echo -n ' --cap-add') [...]\"" >&2
+	exit 1
+fi
