@@ -1,23 +1,24 @@
-#!/usr/bin/with-contenv sh
+#!/bin/execlineb -P
 
-set -e
-
-CONFIG_FILE=${CONFIG_FILE:-$(find $CONFIG_DIR -iname "*.y*ml" | head -n 1)}
-
-TUN="/dev/net/tun"
-
-if [ ! -e $TUN ]; then
-	mkdir -p $(dirname $TUN)
-	mknod -m a+w $TUN c 10 200
-fi
-
-if ! nebula -test -config $CONFIG_FILE &> /dev/null; then
-	cd $(readlink -f $0 | xargs dirname)
-	echo -e "Missing/invalid nebula config file.\nAborting.\n$CONFIG_FILE" >&2
-	exec s6-svscanctl -b $(dirname $PWD)
-else
-	cd $(readlink -f $CONFIG_FILE | xargs dirname)
-	chmod -R +r $PWD
-	exec s6-setuidgid nebula \
-		nebula -config $CONFIG_FILE
-fi
+backtick -E CONFIG_DIR { printcontenv CONFIG_DIR }
+backtick -E _CONFIG_FILE {
+	pipeline -d { find ${CONFIG_DIR} -name "*.y*ml" -exec stat -c "%Y %n" {} + }
+	pipeline -d { s6-sort }
+	awk "END{print $NF}"
+}
+backtick -D ${_CONFIG_FILE} -E CONFIG_FILE { printcontenv CONFIG_FILE }
+ifelse -n {
+	s6-setuidgid nebula
+	redirfd -w 1 /dev/null
+	nebula -test -config ${CONFIG_FILE}
+} {
+	foreground {
+		redirfd -w 1 /dev/stderr
+		s6-echo "[ERROR] Missing/invalid nebula config file. Aborting."
+	}
+	getcwd -E PWD
+	pipeline -d { s6-dirname ${PWD} }
+	xargs s6-svscanctl -tb
+}
+s6-setuidgid nebula
+nebula -config ${CONFIG_FILE}
