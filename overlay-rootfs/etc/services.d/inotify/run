@@ -1,17 +1,20 @@
-#!/usr/bin/with-contenv sh
+#!/bin/execlineb -P
 
-set -e
-
-# is nebula running for more than 1 sec?
-until NEBULA_PID=$(pidof nebula) && [ $(ps -p $NEBULA_PID -o "etimes=") -gt 1 ]; do
-	sleep 1
-done
-
-CONFIG_FILE=${CONFIG_FILE:-$(ps -p $NEBULA_PID -o "args=" | xargs -n 1 ls 2> /dev/null || :)}
-NEBULA_S6_PID=$(ps -p $NEBULA_PID -o "ppid=")
-NEBULA_S6_PWD=$(pwdx $NEBULA_S6_PID | awk '{print $NF}')
-
-while watch -g find $CONFIG_DIR $CONFIG_FILE -type f -exec md5sum {} + &> /dev/null; do
-	echo "[WARN] Config files have changed. Restarting service..." >&2
-	s6-svc -r $NEBULA_S6_PWD
-done
+backtick -E S6_NEBULA {
+	pipeline -d { pidof s6-supervise }
+	pipeline -d { xargs pwdx }
+	awk "/nebula/ {print $NF}"
+}
+if { s6-svwait -U ${S6_NEBULA} }
+backtick -E CONFIG_DIR { printcontenv CONFIG_DIR }
+backtick -E _CONFIG_FILE {
+	backtick -E PID { pidof nebula }
+	pipeline -d { ps -p ${PID} -o "args=" }
+	foreground { redirfd -w 2 /dev/null xargs -n 1 ls }
+}
+backtick -D ${_CONFIG_FILE} -E CONFIG_FILE { printcontenv CONFIG_FILE }
+fdmove -c 1 2
+loopwhilex
+foreground { inotifywait -e "create,delete,modify,move" -q -r ${CONFIG_DIR} ${CONFIG_FILE} }
+foreground { s6-echo "[WARN] Config files have changed. Restarting service..." }
+s6-svc -wR -r ${S6_NEBULA}

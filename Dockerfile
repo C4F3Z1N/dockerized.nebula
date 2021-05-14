@@ -3,10 +3,11 @@ ARG ALPINE_VERSION="3.13"
 FROM alpine:${ALPINE_VERSION}
 
 RUN apk add --no-cache \
-	libcap \
-	nebula \
-	procps \
-	s6-overlay
+		inotify-tools \
+		libcap \
+		nebula \
+		procps \
+		s6-overlay
 
 ARG S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=${S6_BEHAVIOUR_IF_STAGE2_FAILS}
