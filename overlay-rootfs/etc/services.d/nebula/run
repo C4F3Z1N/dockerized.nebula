@@ -13,12 +13,12 @@ ifelse -n {
 	nebula -test -config ${CONFIG_FILE}
 } {
 	foreground {
-		redirfd -w 1 /dev/stderr
-		s6-echo "[ERROR] Missing/invalid nebula config file. Aborting."
+		fdmove -c 1 2
+		s6-echo "[ERROR] Missing/invalid nebula config file. Aborting..."
 	}
 	getcwd -E PWD
-	pipeline -d { s6-dirname ${PWD} }
-	xargs s6-svscanctl -tb
+	s6-svscanctl -tb "${PWD}/.."
 }
+s6-notifyoncheck -d
 s6-setuidgid nebula
 nebula -config ${CONFIG_FILE}

@@ -1,0 +1,13 @@
+#!/bin/execlineb -P
+
+backtick -E PID { pidof nebula }
+backtick -D 0 -E ELAPSED { pipeline -d { ps -p ${PID} -o "etimes=" } tr -cd "0-9" }
+if { s6-test ${ELAPSED} -gt 1 }
+backtick -E _CONFIG_FILE {
+	pipeline -d { ps -p ${PID} -o "args=" }
+	foreground { redirfd -w 2 /dev/null xargs -n 1 ls }
+}
+backtick -D ${_CONFIG_FILE} -E CONFIG_FILE { printcontenv CONFIG_FILE }
+s6-setuidgid nebula
+redirfd -w 1 /dev/null
+nebula -test -config ${CONFIG_FILE}
