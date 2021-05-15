@@ -1,10 +1,10 @@
-#!/usr/bin/with-contenv sh
+#!/bin/execlineb -P
 
-set -e
-
-TUN="/dev/net/tun"
-
-if [ ! -e $TUN ]; then
-	mkdir -p $(dirname $TUN)
-	mknod -m a+w $TUN c 10 200
-fi
+define TUN "/dev/net/tun"
+if -nt { s6-test -e ${TUN} }
+foreground {
+	fdmove -c 1 2
+	s6-echo "[WARN] \"${TUN}\" not found. Attempting to \"mknod\"..."
+}
+if { pipeline -d { dirname ${TUN} } xargs mkdir -p }
+if { mknod -m a+w ${TUN} c 10 200 }

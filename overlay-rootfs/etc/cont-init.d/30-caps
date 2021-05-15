@@ -1,23 +1,28 @@
-#!/usr/bin/with-contenv sh
+#!/bin/execlineb -P
 
-set -e
-
-REQUIRED_CAPS=${REQUIRED_CAPS:-"cap_net_admin"}
-
-checkpcaps() {
-    local CURRENT="$(getpcaps $$),"
-	local MISSING=$(mktemp -u)
-    for REQUIRED in "$@"; do
-		if ! echo $CURRENT | grep -q "$REQUIRED,"; then
-			REQUIRED=$(echo ${REQUIRED#"cap_"} | tr "[a-z]" "[A-Z]")
-			echo $REQUIRED >> $MISSING
-		fi
-    done
-	cat $MISSING 2> /dev/null
+backtick -E PCAPS { mktemp }
+foreground {
+	redirfd -w 1 ${PCAPS}
+	pipeline -d { getpid -E PID getpcaps ${PID} }
+	pipeline -d { awk "{print $NF}" }
+	pipeline -d { tr "," "\n" }
+	s6-sort
 }
-
-if MISSING=$(checkpcaps $REQUIRED_CAPS); then
-	echo "[ERROR] Linux capabilities are missing. Please include them and try again." >&2
-	echo -e "\te.g. \"docker run$(echo $MISSING | xargs -n 1 echo -n ' --cap-add') [...]\"" >&2
-	exit 1
-fi
+backtick -E RCAPS { mktemp }
+foreground {
+	redirfd -w 1 ${RCAPS}
+	pipeline -d { s6-echo "cap_mknod,cap_net_admin" }
+	pipeline -d { tr "," "\n" }
+	s6-sort
+}
+backtick -E ACAPS { mktemp }
+foreground { redirfd -w 1 ${ACAPS} grep -o -f ${RCAPS} ${PCAPS} }
+fdmove -c 1 2
+if -nt { cmp -s ${ACAPS} ${RCAPS} }
+foreground {
+	backtick -E MCAPS {
+		pipeline -d { grep -v -f ${ACAPS} ${RCAPS} } xargs
+	}
+	s6-echo "[ERROR] Linux capabilities are missing: ${MCAPS}"
+}
+exit 1

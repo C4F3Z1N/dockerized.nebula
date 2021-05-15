@@ -1,20 +1,20 @@
 #!/bin/execlineb -P
 
-backtick -E S6_NEBULA {
+backtick -E NEBULA_S6_DIR {
 	pipeline -d { pidof s6-supervise }
 	pipeline -d { xargs pwdx }
 	awk "/nebula/ {print $NF}"
 }
-if { s6-svwait -U ${S6_NEBULA} }
+if { s6-svwait -U ${NEBULA_S6_DIR} }
 backtick -E CONFIG_DIR { printcontenv CONFIG_DIR }
+fdmove -c 1 2
+loopwhilex
 backtick -E _CONFIG_FILE {
 	backtick -E PID { pidof nebula }
 	pipeline -d { ps -p ${PID} -o "args=" }
 	foreground { redirfd -w 2 /dev/null xargs -n 1 ls }
 }
 backtick -D ${_CONFIG_FILE} -E CONFIG_FILE { printcontenv CONFIG_FILE }
-fdmove -c 1 2
-loopwhilex
 foreground { inotifywait -e "create,delete,modify,move" -q -r ${CONFIG_DIR} ${CONFIG_FILE} }
 foreground { s6-echo "[WARN] Config files have changed. Restarting service..." }
-s6-svc -wR -r ${S6_NEBULA}
+s6-svc -wR -r ${NEBULA_S6_DIR}
