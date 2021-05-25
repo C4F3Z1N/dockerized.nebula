@@ -17,12 +17,12 @@ foreground {
 }
 backtick -E ACAPS { mktemp }
 foreground { redirfd -w 1 ${ACAPS} grep -o -f ${RCAPS} ${PCAPS} }
-fdmove -c 1 2
 if -nt { cmp -s ${ACAPS} ${RCAPS} }
 foreground {
 	backtick -E MCAPS {
 		pipeline -d { grep -v -f ${ACAPS} ${RCAPS} } xargs
 	}
+	fdmove -c 1 2
 	s6-echo "[ERROR] Linux capabilities are missing: ${MCAPS}"
 }
 exit 1

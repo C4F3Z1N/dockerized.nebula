@@ -17,9 +17,6 @@ ENV CONFIG_DIR=${CONFIG_DIR}
 VOLUME ${CONFIG_DIR}
 WORKDIR ${CONFIG_DIR}
 
-RUN echo "${CONFIG_DIR} true nebula,$(id -u nobody):$(id -g nobody) 0644 2755" | \
-		tee /etc/fix-attrs.d/30-configdir
-
 COPY overlay-rootfs /
 
 CMD ["/init"]

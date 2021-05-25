@@ -8,7 +8,6 @@ backtick -E _CONFIG_FILE {
 }
 backtick -D ${_CONFIG_FILE} -E CONFIG_FILE { printcontenv CONFIG_FILE }
 ifelse -n {
-	s6-setuidgid nebula
 	redirfd -w 1 /dev/null
 	nebula -test -config ${CONFIG_FILE}
 } {
@@ -20,5 +19,4 @@ ifelse -n {
 	s6-svscanctl -tb "${PWD}/.."
 }
 s6-notifyoncheck -d
-s6-setuidgid nebula
 nebula -config ${CONFIG_FILE}
