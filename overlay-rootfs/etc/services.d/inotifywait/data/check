@@ -1,0 +1,13 @@
+#!/bin/execlineb -P
+
+backtick -E service_name {
+	getcwd -E cwd
+	s6-basename ${cwd}
+}
+backtick -D 0 -E elapsed {
+	backtick -D 0 -E pid { pidof ${service_name} }
+	if { s6-test ${pid} -gt 0 }
+	pipeline { ps -o "etimes=" -p ${pid} }
+	tr -cd "0-9"
+}
+s6-test ${elapsed} -gt 3

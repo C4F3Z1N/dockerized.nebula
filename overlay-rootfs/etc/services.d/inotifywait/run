@@ -1,20 +1,46 @@
 #!/bin/execlineb -P
 
-backtick -E NEBULA_S6_DIR {
-	pipeline -d { pidof s6-supervise }
-	pipeline -d { xargs pwdx }
-	awk "/nebula/ {print $NF}"
+getpid pid
+# get all other services' PIDs and use them to find their pwdx;
+backtick watched_services {
+	backtick -E ppid {
+		importas -iu pid pid
+		pipeline { ps -o "ppid=" -p ${pid} }
+		tr -d "[:blank:]"
+	}
+	pipeline { pidof s6-supervise }
+	forstdin -d " " -p -E pid
+	if -nt { heredoc 0 ${pid} grep -q ${ppid} }
+	pipeline { pwdx ${pid} }
+	awk "{print $NF}"
 }
-if { s6-svwait -U ${NEBULA_S6_DIR} }
-backtick -E CONFIG_DIR { printcontenv CONFIG_DIR }
+importas -isu watched_services watched_services
+backtick -E S6_CMD_WAIT_FOR_SERVICES_MAXTIME {
+	printcontenv S6_CMD_WAIT_FOR_SERVICES_MAXTIME
+}
+# wait for their initalization;
+if {
+	redirfd -w 2 /dev/null
+	forx -o 0 -p -E service { ${watched_services} }
+	s6-svwait -t ${S6_CMD_WAIT_FOR_SERVICES_MAXTIME} -U ${service}
+}
+s6-notifyoncheck -t ${S6_CMD_WAIT_FOR_SERVICES_MAXTIME}
+loopwhilex -o 0
+# read all the "CONFIG*"-related envvars;
+backtick CONFIG {
+	elglob keys "${watched_services}/env/CONFIG*"
+	forx -o 0 -E key { ${keys} }
+	backtick -E value { redirfd -r 0 ${key} s6-cat }
+	if -t { s6-test -e ${value} }
+	s6-echo ${value}
+}
+importas -isu CONFIG CONFIG
 fdmove -c 1 2
-loopwhilex
-backtick -E _CONFIG_FILE {
-	backtick -E PID { pidof nebula }
-	pipeline -d { ps -p ${PID} -o "args=" }
-	foreground { redirfd -w 2 /dev/null xargs -n 1 ls }
+# start watching the directories and/or files;
+if { inotifywait -e "create,delete,modify,move" ${CONFIG} }
+foreground {
+	s6-echo "[WARN] Config files have changed. Restarting service(s)."
 }
-backtick -D ${_CONFIG_FILE} -E CONFIG_FILE { printcontenv CONFIG_FILE }
-foreground { inotifywait -e "create,delete,modify,move" -q -r ${CONFIG_DIR} ${CONFIG_FILE} }
-foreground { s6-echo "[WARN] Config files have changed. Restarting service..." }
-s6-svc -wR -r ${NEBULA_S6_DIR}
+# restart all services and wait for the "ready" signal;
+forx -o 0 -p -E service { ${watched_services} }
+s6-svc -wR -r ${service}
