@@ -1,0 +1,29 @@
+#!/bin/execlineb -P
+
+backtick -D "/etc/services.d" -E SERVICES_DIR {
+	printcontenv SERVICES_DIR
+}
+backtick watched_services {
+	pipeline { pidof s6-supervise }
+	forstdin -d " " -p -E pid
+	backtick -E pwdx {
+		pipeline { pwdx ${pid} }
+		awk "{print $NF}"
+	}
+	if -t {
+		backtick -E service_name { s6-basename ${pwdx} }
+		s6-test -d "${SERVICES_DIR}/${service_name}"
+	}
+	s6-echo ${pwdx}
+}
+importas -isu watched_services watched_services
+fdmove -c 1 2
+foreground { s6-echo "[pwdx]: [?]" }
+forx -o 0 -p -E service { ${watched_services} }
+foreground {
+	pipeline { s6-svstat -ur ${service} }
+	grep -q "true true"
+}
+importas -iu ? ?
+foreground { s6-echo "${service}: ${?}" }
+exit ${?}
