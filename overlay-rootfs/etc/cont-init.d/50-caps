@@ -1,28 +1,26 @@
 #!/bin/execlineb -P
 
-backtick -E PCAPS { mktemp }
-foreground {
-	redirfd -w 1 ${PCAPS}
-	pipeline -d { getpid -E PID getpcaps ${PID} }
-	pipeline -d { awk "{print $NF}" }
-	pipeline -d { tr "," "\n" }
+backtick -E available_capabilities {
+	pipeline { getpid -E pid getpcaps ${pid} }
+	pipeline { awk "{print $NF}" }
+	pipeline { tr "," "\n" }
 	s6-sort
 }
-backtick -E RCAPS { mktemp }
-foreground {
-	redirfd -w 1 ${RCAPS}
-	pipeline -d { s6-echo "cap_mknod,cap_net_admin" }
-	pipeline -d { tr "," "\n" }
-	s6-sort
+define -s required_capabilities "cap_mknod cap_net_admin"
+backtick missing_capabilities {
+	forx -E cap { ${required_capabilities} }
+	if -nt { heredoc 0 ${available_capabilities} grep -q ${cap} }
+	s6-echo ${cap}
 }
-backtick -E ACAPS { mktemp }
-foreground { redirfd -w 1 ${ACAPS} grep -o -f ${RCAPS} ${PCAPS} }
-if -nt { cmp -s ${ACAPS} ${RCAPS} }
-foreground {
-	backtick -E MCAPS {
-		pipeline -d { grep -v -f ${ACAPS} ${RCAPS} } xargs
+importas -su missing_capabilities missing_capabilities
+if -t {
+	backtick -E missing_capabilities_length {
+		pipeline { s6-echo -n ${missing_capabilities} }
+		wc -m
 	}
-	fdmove -c 1 2
-	s6-echo "[ERROR] Linux capabilities are missing: ${MCAPS}"
+	s6-test ${missing_capabilities_length} -ne 0
 }
-exit 1
+fdmove -c 1 2
+foreground { s6-echo -n "[ERROR] Linux capabilities are missing: " }
+foreground { s6-echo ${missing_capabilities} }
+exit 127
