@@ -1,22 +1,66 @@
 #!/bin/execlineb -P
 
-backtick -E CONFIG_DIR { printcontenv CONFIG_DIR }
-backtick -E _CONFIG_FILE {
-	pipeline -d { find ${CONFIG_DIR} -name "*.y*ml" -exec stat -c "%Y %n" {} + }
-	pipeline -d { s6-sort }
-	awk "END{print $NF}"
+s6-envdir -I "env"
+backtick -E CONFIG_DIR {
+	if -nt { printenv CONFIG_DIR }
+	printcontenv CONFIG_DIR
 }
-backtick -D ${_CONFIG_FILE} -E CONFIG_FILE { printcontenv CONFIG_FILE }
-ifelse -n {
-	redirfd -w 1 /dev/null
-	nebula -test -config ${CONFIG_FILE}
-} {
+backtick -E CONFIG_FILE {
+	redirfd -w 2 /dev/null
+	if -nt { printenv CONFIG_FILE }
+	if -nt { printcontenv CONFIG_FILE }
+	# pick the most recently modified YAML file;
+	elglob c "${CONFIG_DIR}/*.y*ml"
+	pipeline { stat -c "%Y %n" ${c} }
+	pipeline { s6-sort }
+	awk "END {print $NF}"
+}
+foreground {
+	# if TUN is required, confirm that it exists/create it;
+	if -nt {
+		redirfd -w 2 /dev/null
+		pipeline { yq eval ".tun.disabled" ${CONFIG_FILE} }
+		withstdinas -D "false" -E tun_disabled
+		"s6-${tun_disabled}"
+	}
+	define TUN "/dev/net/tun"
+	if -nt { s6-test -e ${TUN} }
 	foreground {
 		fdmove -c 1 2
-		s6-echo "[ERROR] Missing/invalid nebula config file. Aborting..."
+		s6-echo "[WARN] \"${TUN}\" not found. Attempting to \"mknod\"..."
 	}
-	getcwd -E PWD
-	s6-svscanctl -tb "${PWD}/.."
+	if {
+		backtick -E dirname { s6-dirname ${TUN} }
+		s6-mkdir -p ${dirname}
+	}
+	mknod -m a+w ${TUN} c 10 200
 }
-s6-notifyoncheck -d
+# test the CONFIG_FILE and redirect the output to test_output;
+backtick -E test_output { mktemp -u }
+foreground {
+	redirfd -w 1 ${test_output}
+	fdmove -c 2 1
+	execline-cd ${CONFIG_DIR}
+	nebula -test -config ${CONFIG_FILE}
+}
+importas -iu ? ?
+# if the test fails, display the errors and exit;
+ifelse { s6-test ${?} -ne 0 } {
+	fdmove -c 1 2
+	foreground { s6-echo "[ERROR] Missing/invalid nebula config file. Aborting." }
+	foreground { grep -io "error=.*" ${test_output} }
+	exit ${?}
+}
+# make ENV available for other stages;
+foreground {
+	exec -c
+	export CONFIG_DIR ${CONFIG_DIR}
+	export CONFIG_FILE ${CONFIG_FILE}
+	s6-dumpenv "env"
+}
+backtick -E S6_CMD_WAIT_FOR_SERVICES_MAXTIME {
+	printcontenv S6_CMD_WAIT_FOR_SERVICES_MAXTIME
+}
+s6-notifyoncheck -t ${S6_CMD_WAIT_FOR_SERVICES_MAXTIME}
+execline-cd ${CONFIG_DIR}
 nebula -config ${CONFIG_FILE}

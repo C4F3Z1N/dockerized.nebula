@@ -1,13 +1,15 @@
 #!/bin/execlineb -P
 
-backtick -E PID { pidof nebula }
-if { s6-test ${PID} }
-backtick -D 0 -E ELAPSED { pipeline -d { ps -p ${PID} -o "etimes=" } tr -cd "0-9" }
-if { s6-test ${ELAPSED} -gt 1 }
-backtick -E _CONFIG_FILE {
-	pipeline -d { ps -p ${PID} -o "args=" }
-	foreground { redirfd -w 2 /dev/null xargs -n 1 ls }
+s6-envdir "env"
+importas -iu CONFIG_DIR CONFIG_DIR
+importas -iu CONFIG_FILE CONFIG_FILE
+backtick -D 0 -E elapsed {
+	backtick -D 0 -E pid { pidof nebula }
+	if { s6-test ${pid} -gt 0 }
+	pipeline { ps -o "etimes=" -p ${pid} }
+	tr -cd "0-9"
 }
-backtick -D ${_CONFIG_FILE} -E CONFIG_FILE { printcontenv CONFIG_FILE }
+if { s6-test ${elapsed} -gt 3 }
 redirfd -w 1 /dev/null
+execline-cd ${CONFIG_DIR}
 nebula -test -config ${CONFIG_FILE}
